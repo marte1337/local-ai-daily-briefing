@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { daysAgo, parseCliArgs } from "./cli.js";
 import { getGitSummary } from "./git.js";
 import { getWeatherSummary } from "./weather.js";
 import { getNews } from "./news/index.js";
@@ -8,18 +9,14 @@ import { buildDailyBriefingPrompt } from "./prompt.js";
 import { sendBriefing } from "./mail.js";
 
 async function main() {
-    const repoPath = process.argv[2];
-    const model = process.argv[3] ?? "qwen3.5:9b";
-
-    if (!repoPath) {
-        throw new Error("Usage: npx tsx src/index.ts <repository-path> [model]");
-    }
+    const { repoPath, model, mainGitDays, branchGitDays } = parseCliArgs();
 
     console.log(`Collecting Git activity from: ${repoPath}`);
     console.log(`Model: ${model}`);
+    console.log(`Git windows: main ${mainGitDays} day(s), branches ${branchGitDays} day(s)`);
 
     const [gitSummary, weatherSummary, rawNewsSummary] = await Promise.all([
-        safeCollect("Git activity", () => getGitSummary(repoPath, "10 days ago", "45 days ago")), // extend timeframe a bit to get results
+        safeCollect("Git activity", () => getGitSummary(repoPath, daysAgo(mainGitDays), daysAgo(branchGitDays))),
         safeCollect("weather", () => getWeatherSummary()),
         safeCollect("news", () => getNews()),
     ]);

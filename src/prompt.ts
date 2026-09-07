@@ -6,11 +6,12 @@ export function buildDailyBriefingPrompt(gitSummary: GitSummary | null, weatherS
               repository: gitSummary.repository,
               branch: gitSummary.branch,
               workingTree: gitSummary.workingTree,
+              latestMainCommitDate: formatDate(gitSummary.commits[0]?.date),
 
               commits: gitSummary.commits.map((commit) => ({
                   hash: commit.hash,
                   author: commit.author,
-                  date: commit.date,
+                  date: formatDate(commit.date),
                   message: commit.message,
                   body: commit.body || undefined,
                   addedFiles: commit.addedFiles,
@@ -25,7 +26,7 @@ export function buildDailyBriefingPrompt(gitSummary: GitSummary | null, weatherS
               activeBranches: gitSummary.activeBranches.map((branch) => ({
                   name: branch.name,
                   commitsAhead: branch.commitsAhead,
-                  lastCommitDate: branch.lastCommitDate,
+                  lastCommitDate: formatDate(branch.lastCommitDate),
                   author: branch.author,
                   unmergedCommits: branch.unmergedCommits,
               })),
@@ -49,6 +50,7 @@ export function buildDailyBriefingPrompt(gitSummary: GitSummary | null, weatherS
               url: item.url,
               summary: item.summary,
               section: item.section,
+              readingMinutes: item.readingMinutes,
           }))
         : null;
 
@@ -90,6 +92,9 @@ PROJECT:
 - Do not describe unmerged branch work as already present on main.
 - Do not infer whether a branch is finished, approved, abandoned, or ready to merge.
 - If there are no active branches, say so.
+- Only show the most recent included commit date when at least one commit is supplied.
+- State the date of the most recent included main-branch commit.
+- For each active unmerged branch, also mention its lastCommitDate.
 
 WEATHER:
 - windSpeed is measured in km/h.
@@ -114,9 +119,10 @@ AI NEWS:
 - Select 4-5 of the most useful candidates.
 - Prioritize models, developer tooling, APIs, local/open-weight AI, inference and meaningful research.
 - Summarize each item in one concise sentence without strengthening the source claim.
+- Include the supplied readingMinutes after the article title.
 - Preserve the supplied title and URL.
 - Format:
-  - [Article title](URL) — concise summary
+  - [Article title](URL) (X min read) — concise summary
 
 GIT DATA:
 ${gitData ? JSON.stringify(gitData) : "UNAVAILABLE"}
@@ -130,4 +136,20 @@ ${generalNewsData ? JSON.stringify(generalNewsData) : "UNAVAILABLE"}
 AI NEWS CANDIDATES:
 ${aiNewsData ? JSON.stringify(aiNewsData) : "UNAVAILABLE"}
 `;
+}
+
+function formatDate(date: string | null | undefined): string | null {
+    if (!date) {
+        return null;
+    }
+
+    return new Intl.DateTimeFormat("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        timeZone: "Europe/Berlin",
+    }).format(new Date(date));
 }

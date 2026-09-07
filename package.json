@@ -1,25 +1,26 @@
 {
-  "name": "local-daily-briefing",
-  "version": "1.0.0",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
-  "devDependencies": {
-    "@types/node": "^26.2.0",
-    "tsx": "^4.23.12",
-    "typescript": "^7.0.2"
-  },
-  "dependencies": {
-    "@azure/msal-node": "^6.0.0",
-    "@azure/msal-node-extensions": "^5.5.0",
-    "cheerio": "^1.2.0",
-    "dotenv": "^17.4.2",
-    "marked": "^18.0.11",
-    "rss-parser": "^3.13.0"
-  }
+    "name": "local-daily-briefing",
+    "version": "1.0.0",
+    "main": "index.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "briefing": "tsx src/index.ts"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "description": "",
+    "devDependencies": {
+        "@types/node": "^26.2.0",
+        "tsx": "^4.23.12",
+        "typescript": "^7.0.2"
+    },
+    "dependencies": {
+        "@azure/msal-node": "^6.0.0",
+        "@azure/msal-node-extensions": "^5.5.0",
+        "cheerio": "^1.2.0",
+        "dotenv": "^17.4.2",
+        "marked": "^18.0.11",
+        "rss-parser": "^3.13.0"
+    }
 }

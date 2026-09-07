@@ -82,6 +82,7 @@ export type NewsItem = {
     publishedAt: string | null;
     summary: string | null;
     section?: string;
+    readingMinutes?: number;
 };
 
 export type NewsSummary = {
