@@ -1,117 +1,76 @@
 # Local Daily Briefing
 
-Small proof-of-concept that collects recent Git activity from a local repository and asks a local Ollama model to turn it into a concise developer morning briefing.
+A small Node.js/TypeScript tool that builds a personal morning briefing from:
 
-## Prerequisites
+- recent Git activity from a local repository
+- Bremen weather
+- general news
+- AI news
+
+The briefing is generated with a local Ollama model and sent by email through Microsoft Graph.
+
+## Requirements
 
 - Node.js 20+
 - Git
 - Ollama
 
-## Initial setup
+## Setup
+
+Install dependencies:
 
 ```powershell
-mkdir local-daily-briefing
-cd local-daily-briefing
-
-npm init -y
-npm install -D typescript tsx @types/node
+npm install
 ```
 
-## Project structure
+Configure the default Ollama model in `package.json`:
 
-```text
-src/
-├─ index.ts
-├─ git.ts
-├─ ollama.ts
-├─ prompt.ts
-└─ types.ts
+```json
+"config": {
+  "default_model": "qwen3.5:9b"
+}
+```
+
+Create a `.env` file with the Microsoft Graph settings used for email delivery:
+
+```env
+MS_CLIENT_ID=...
+MS_TENANT_ID=...
+BRIEFING_RECIPIENTS=you@example.com,colleague@example.com
 ```
 
 ## Run the briefing
 
-Pass the repository path and, optionally, the Ollama model:
+```powershell
+npm run briefing -- <repository-path> [model] [main-days] [branch-days]
+```
+
+Examples:
 
 ```powershell
-npx tsx src/index.ts "D:\develop\next-wk\nextjs" qwen3.5:9b
+# Default model, 1 day for main and active branches
+npm run briefing -- "D:\develop\next-wk\nextjs"
+
+# Default model, 7 days for both Git windows
+npm run briefing -- "D:\develop\next-wk\nextjs" 7
+
+# Default model, 7 days for main and 30 days for active branches
+npm run briefing -- "D:\develop\next-wk\nextjs" 7 30
+
+# Override the model
+npm run briefing -- "D:\develop\next-wk\nextjs" llama3.1:8b
+
+# Override everything
+npm run briefing -- "D:\develop\next-wk\nextjs" qwen3.5:9b 14 50
 ```
 
-Other models can be tested with the same input:
-
-```powershell
-npx tsx src/index.ts "D:\develop\next-wk\nextjs" llama3.1:8b
-npx tsx src/index.ts "D:\develop\next-wk\nextjs" qwen3.5:4b
-npx tsx src/index.ts "D:\develop\next-wk\nextjs" gemma4:12b
-```
-
-If no model is supplied, the current code defaults to:
-
-```text
-qwen3.5:9b
-```
+If `branch-days` is omitted, it uses the same value as `main-days`.
 
 ## Useful Ollama commands
 
-Show installed models:
-
 ```powershell
 ollama list
-```
-
-Download a model:
-
-```powershell
 ollama pull qwen3.5:9b
-ollama pull llama3.1:8b
-```
-
-Show models currently loaded in memory:
-
-```powershell
 ollama ps
-```
-
-Unload a model:
-
-```powershell
 ollama stop qwen3.5:9b
 ```
-
-Remove a downloaded model:
-
-```powershell
-ollama rm qwen3.5:9b
-```
-
-Run a model interactively:
-
-```powershell
-ollama run qwen3.5:9b
-```
-
-## Useful Git check
-
-To verify the repository has recent non-merge commits:
-
-```powershell
-git -C "D:\develop\next-wk\nextjs" log --since="7 days ago" --oneline --no-merges
-```
-
-## Current PoC flow
-
-```text
-Local Git repository
-        ↓
-Structured Git data
-        ↓
-Prompt
-        ↓
-Ollama local API
-        ↓
-Local AI model
-        ↓
-Developer briefing
-```
-
-The next planned steps are to add other daily-briefing inputs such as weather and news/RSS, and later deliver the generated briefing automatically.

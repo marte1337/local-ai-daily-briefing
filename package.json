@@ -6,6 +6,9 @@
         "test": "echo \"Error: no test specified\" && exit 1",
         "briefing": "tsx src/index.ts"
     },
+    "config": {
+        "defaultModel": "qwen3.5:9b"
+    },
     "keywords": [],
     "author": "",
     "license": "ISC",

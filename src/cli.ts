@@ -5,8 +5,12 @@ export type BriefingCliOptions = {
     branchGitDays: number;
 };
 
-const DEFAULT_MODEL = "qwen3.5:9b";
 const DEFAULT_GIT_DAYS = 1;
+const DEFAULT_MODEL = process.env.npm_package_config_defaultModel;
+
+if (!DEFAULT_MODEL) {
+    throw new Error("Missing config.defaultModel in package.json.");
+}
 
 function parseDays(value: string | undefined): number | undefined {
     if (value === undefined) {
