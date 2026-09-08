@@ -6,10 +6,14 @@ export type BriefingCliOptions = {
 };
 
 const DEFAULT_GIT_DAYS = 1;
-const DEFAULT_MODEL = process.env.npm_package_config_defaultModel;
+function getDefaultModel(): string {
+    const model = process.env.npm_package_config_defaultModel;
 
-if (!DEFAULT_MODEL) {
-    throw new Error("Missing config.defaultModel in package.json.");
+    if (!model) {
+        throw new Error("Missing config.defaultModel in package.json.");
+    }
+
+    return model;
 }
 
 function parseDays(value: string | undefined): number | undefined {
@@ -38,7 +42,7 @@ export function parseCliArgs(args = process.argv.slice(2)): BriefingCliOptions {
     }
 
     let index = 1;
-    let model = DEFAULT_MODEL;
+    let model = getDefaultModel();
 
     // A non-numeric second argument is interpreted as the model.
     if (args[index] && !/^\d+$/.test(args[index])) {
