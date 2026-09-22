@@ -43,7 +43,10 @@ async function main() {
     // console.log("\n=== Structured News Data ===\n");
     // console.log(JSON.stringify(newsSummary, null, 2));
 
-    const prompt = buildDailyBriefingPrompt(gitSummary, weatherSummary, newsSummary);
+    const prompt = buildDailyBriefingPrompt(gitSummary, weatherSummary, newsSummary, {
+        mainGitDays,
+        branchGitDays,
+    });
 
     console.log("\n=== AI Daily Briefing ===\n");
 

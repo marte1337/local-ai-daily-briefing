@@ -6,43 +6,28 @@ export type BriefingCliOptions = {
 };
 
 const DEFAULT_GIT_DAYS = 1;
-function getDefaultModel(): string {
-    const model = process.env.npm_package_config_defaultModel;
+function getConfig(name: string): string {
+    const value = process.env[name];
+    if (!value) throw new Error(`Missing environment variable: ${name}`);
 
-    if (!model) {
-        throw new Error("Missing config.defaultModel in package.json.");
-    }
-
-    return model;
+    return value;
 }
 
 function parseDays(value: string | undefined): number | undefined {
-    if (value === undefined) {
-        return undefined;
-    }
-
-    if (!/^\d+$/.test(value)) {
-        throw new Error(`Invalid Git window "${value}". Expected a number of days.`);
-    }
+    if (value === undefined) return undefined;
+    if (!/^\d+$/.test(value)) throw new Error(`Invalid Git window "${value}". Expected a number of days.`);
 
     const days = Number.parseInt(value, 10);
-
-    if (days < 1) {
-        throw new Error("Git window must be at least 1 day.");
-    }
+    if (days < 1) throw new Error("Git window must be at least 1 day.");
 
     return days;
 }
 
 export function parseCliArgs(args = process.argv.slice(2)): BriefingCliOptions {
-    const repoPath = args[0];
+    const repoPath = getConfig("BRIEFING_REPO");
+    let model = getConfig("BRIEFING_MODEL");
 
-    if (!repoPath) {
-        throw new Error("Usage: npm run briefing -- <repository-path> [model] [main-days] [branch-days]");
-    }
-
-    let index = 1;
-    let model = getDefaultModel();
+    let index = 0;
 
     // A non-numeric second argument is interpreted as the model.
     if (args[index] && !/^\d+$/.test(args[index])) {

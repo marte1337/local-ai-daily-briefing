@@ -1,12 +1,27 @@
 import type { GitSummary, NewsSummary, WeatherSummary } from "./types.js";
 
-export function buildDailyBriefingPrompt(gitSummary: GitSummary | null, weatherSummary: WeatherSummary | null, newsSummary: NewsSummary | null): string {
+type PromptOptions = {
+    mainGitDays: number;
+    branchGitDays: number;
+};
+
+export function buildDailyBriefingPrompt(
+    gitSummary: GitSummary | null,
+    weatherSummary: WeatherSummary | null,
+    newsSummary: NewsSummary | null,
+    options: PromptOptions,
+): string {
     const gitData = gitSummary
         ? {
               repository: gitSummary.repository,
               branch: gitSummary.branch,
               workingTree: gitSummary.workingTree,
-              latestMainCommitDate: formatDate(gitSummary.commits[0]?.date),
+
+              mainActivityWindowDays: options.mainGitDays,
+
+              branchActivityWindowDays: options.branchGitDays,
+
+              latestMainCommitDate: gitSummary.commits.length > 0 ? formatDate(gitSummary.commits[0].date) : undefined,
 
               commits: gitSummary.commits.map((commit) => ({
                   hash: commit.hash,
@@ -26,9 +41,12 @@ export function buildDailyBriefingPrompt(gitSummary: GitSummary | null, weatherS
               activeBranches: gitSummary.activeBranches.map((branch) => ({
                   name: branch.name,
                   commitsAhead: branch.commitsAhead,
-                  lastCommitDate: formatDate(branch.lastCommitDate),
+                  lastCommitDate: branch.lastCommitDate ? formatDate(branch.lastCommitDate) : undefined,
                   author: branch.author,
-                  unmergedCommits: branch.unmergedCommits,
+                  unmergedCommits: branch.unmergedCommits.map((commit) => ({
+                      ...commit,
+                      date: formatDate(commit.date),
+                  })),
               })),
 
               unstagedDiff: gitSummary.unstagedDiff,
@@ -60,7 +78,7 @@ export function buildDailyBriefingPrompt(gitSummary: GitSummary | null, weatherS
     return `
 Create a concise English morning briefing using only the supplied data.
 
-OUTPUT EXACTLY:
+OUTPUT EXACTLY THESE SECTIONS:
 
 ## Next.js Project
 ### Main branch
@@ -72,29 +90,33 @@ OUTPUT EXACTLY:
 
 ## AI News
 
-Do not add an introduction, conclusion, key takeaway, recommendations, or questions.
+Do not add an introduction, conclusion, key takeaway, recommendations, questions, or additional sections.
 
 GENERAL:
 - Use only facts supported by the supplied data.
-- Do not invent causes, consequences, technical details, or predictions.
+- Do not invent causes, consequences, technical details, interpretations, or predictions.
 - Keep the briefing concise but informative.
 - If data for a section is UNAVAILABLE, say so briefly and continue.
 
 PROJECT:
 - Keep main-branch work and unmerged remote-branch work clearly separate.
-- For Main branch, state repository, branch and working-tree state, then summarize recent work by topic.
-- Group related commits, but keep unrelated work distinct.
+- State the configured activity window for both Main branch and Active unmerged branches.
+- Express activity windows naturally, for example "Activity window: last 7 days."
+- For Main branch, state repository, branch and working-tree state.
+- If commits are supplied, state latestMainCommitDate and summarize recent work by topic.
+- If no commits are supplied, say that no main-branch commits were found within the configured activity window.
+- Do not show a latest commit date when latestMainCommitDate is not supplied.
+- Group related commits when useful, but keep unrelated work distinct.
+- Mention components or files when they help explain the work.
+- Treat supplied commit data as the source of truth.
+- Do not infer behavior or architecture from filenames alone.
 - Never calculate combined commit counts, file counts, additions, or deletions across multiple commits.
-- Mention components/files when useful.
-- Treat each commit independently and do not infer behavior from filenames alone.
-- Supplied Git statistics are authoritative; do not calculate new totals.
-- For each active branch, mention its name, commits ahead of main, and summarize its unmerged commits.
+- Supplied Git statistics are authoritative.
+- For each active branch, mention its name, commits ahead of main, and summarize its supplied unmerged commits.
+- Mention lastCommitDate only when it is supplied.
 - Do not describe unmerged branch work as already present on main.
 - Do not infer whether a branch is finished, approved, abandoned, or ready to merge.
-- If there are no active branches, say so.
-- Only show the most recent included commit date when at least one commit is supplied.
-- State the date of the most recent included main-branch commit.
-- For each active unmerged branch, also mention its lastCommitDate.
+- If no active branches are supplied, say that no active unmerged branches were found within the configured branch activity window.
 
 WEATHER:
 - windSpeed is measured in km/h.
@@ -110,19 +132,28 @@ GENERAL NEWS:
 - Prioritize significant German, European, international, economic and geopolitical stories.
 - Deprioritize sports, entertainment, local crime and human-interest stories unless broadly significant.
 - Use englishTitle EXACTLY as the Markdown link label.
-- Translate/summarize the supplied German summary into one concise English sentence.
+- Translate and summarize the supplied German summary into one concise English sentence.
 - Preserve the supplied URL exactly.
-- Format:
+- Every item MUST be a separate Markdown bullet beginning with "- ".
+- Put one blank line between news items.
+- Never combine multiple articles into one paragraph.
+- Format each item exactly as:
   - [englishTitle](URL) — concise English summary
 
 AI NEWS:
 - Select 4-5 of the most useful candidates.
 - Prioritize models, developer tooling, APIs, local/open-weight AI, inference and meaningful research.
-- Summarize each item in one concise sentence without strengthening the source claim.
-- Include the supplied readingMinutes after the article title.
-- Preserve the supplied title and URL.
-- Format:
+- Summarize each item in one concise sentence without strengthening or embellishing the supplied claim.
+- Preserve the supplied title and URL exactly.
+- If readingMinutes is supplied, include "(X min read)" after the link.
+- If readingMinutes is not supplied, omit the reading-time text entirely.
+- Every item MUST be a separate Markdown bullet beginning with "- ".
+- Put one blank line between news items.
+- Never combine multiple articles into one paragraph.
+- Format items with reading time as:
   - [Article title](URL) (X min read) — concise summary
+- Format items without reading time as:
+  - [Article title](URL) — concise summary
 
 GIT DATA:
 ${gitData ? JSON.stringify(gitData) : "UNAVAILABLE"}
@@ -138,9 +169,9 @@ ${aiNewsData ? JSON.stringify(aiNewsData) : "UNAVAILABLE"}
 `;
 }
 
-function formatDate(date: string | null | undefined): string | null {
+function formatDate(date: string | null | undefined): string | undefined {
     if (!date) {
-        return null;
+        return undefined;
     }
 
     return new Intl.DateTimeFormat("en-GB", {
