@@ -1,62 +1,105 @@
 # Local AI Daily Briefing
 
-A locally generated daily briefing that combines development activity, weather, general news and AI news into a concise morning report and delivers it by email.
+Local AI Daily Briefing collects information from several sources, summarizes it with a locally running language model, and sends the resulting report by email. It is intended for recurring personal briefings that combine project activity, weather, and news in a single document.
 
-The project is built with Node.js and TypeScript and uses local LLM inference through Ollama. Most of the data collection and preprocessing is deterministic; the language model is used primarily for selection, synthesis and summarization.
+The briefing is assembled from independent modules. Modules can be enabled, disabled, and reordered in `briefing.config.json`, so a report can contain only Git activity and weather, for example, or include all available news sections. Module-specific settings such as the repository path, postal code, and Git activity windows are kept in the Git-ignored `.env` file.
 
-## Overview
+Text generation runs through Ollama. Any suitable text-generation model installed in Ollama can be selected with `BRIEFING_MODEL`, without changes to the application code. Collection and preprocessing are handled deterministically where possible; the model is used to select, organize, translate, and summarize the supplied data. Briefing data is not sent to a hosted AI API by this application, although individual modules still contact their configured external data sources.
 
-The goal of this project is to turn several small, repetitive information-gathering tasks into one useful daily briefing.
+Module collection runs concurrently. If one data source is unavailable, the other configured sections can still be generated. The shared module interface also provides a defined place for adding new sources, their prompt instructions, and their output headings. The final Markdown report is rendered as HTML and sent through Microsoft Graph.
 
-It currently combines:
+## Available modules
 
-- recent Git activity from a configurable local repository
-- activity on unmerged remote branches
-- current weather and daily forecast
-- general news
-- dedicated AI and developer-related news
-- estimated reading times for AI articles
-- local LLM-based summarization
-- email delivery through Microsoft Graph
+- `git` — recent main-branch activity and active unmerged remote branches
+- `weather` — current conditions and today's forecast for a configured postal code
+- `general-news` — important general news
+- `ai-news` — AI and developer-tooling news
 
-The result is a short briefing designed to answer:
+## Choose and order modules
 
-- What changed in the project?
-- Is there active work on unmerged branches?
-- What does the day look like weather-wise?
-- What important general news should I know about?
-- What happened in AI and developer tooling?
+`briefing.config.json` lists every available module with a short description. Set `enabled` to `true` or `false`; the array order controls the order of enabled sections:
 
-## Example
+```json
+{
+    "modules": [
+        {
+            "name": "git",
+            "description": "Recent main-branch activity and active unmerged remote branches.",
+            "enabled": true
+        },
+        {
+            "name": "weather",
+            "description": "Current conditions and today's forecast for the postal code configured in .env.",
+            "enabled": true
+        },
+        {
+            "name": "general-news",
+            "description": "Important general news from the configured feed.",
+            "enabled": false
+        },
+        {
+            "name": "ai-news",
+            "description": "AI and developer-tooling news.",
+            "enabled": false
+        }
+    ]
+}
+```
 
-```text
-## Next.js Project
+At least one module must be enabled, and a module cannot be listed more than once. The original compact format, such as `"modules": ["git", "weather"]`, is also supported. To keep the config elsewhere, set `BRIEFING_CONFIG` to its path.
 
-### Main branch
-Repository: nextjs
-Branch: main
-Working-tree state: Clean
-Activity window: last 7 days.
-Latest commit: 25 Aug 2026, 13:06.
+## Configure values
 
-Recent work:
-- Breadcrumb improvements across several page components and supporting models.
-- Author and gallery metadata updates.
-- Event portal cleanup and optimization.
+Copy `.env.example` to `.env` and set the values needed by the enabled modules. `.env` is ignored by Git; `briefing.config.json` contains no user-specific values.
 
-### Active unmerged branches
-Activity window: last 30 days.
+Always required:
 
-- next-styles — 13 commits ahead of main.
-  Recent work includes responsive article changes, tablet breakpoints,
-  header/footer styling and font-related updates.
+```dotenv
+BRIEFING_MODEL=qwen3.5:9b
+```
 
-## Weather in Bremen
-Current conditions: ...
+Required only by `git`:
 
-## General News
-- [Article](...) — concise summary
+```dotenv
+BRIEFING_REPO=D:/path/to/your/repository
+BRIEFING_GIT_MAIN_DAYS=1
+BRIEFING_GIT_BRANCH_DAYS=7
+```
 
-## AI News
-- [Article](...) (10 min read) — concise summary
+The Git windows are optional and default to one day. If the branch window is omitted, it uses the main-branch window.
+
+Required only by `weather`:
+
+```dotenv
+BRIEFING_WEATHER_POSTAL_CODE=28195
+BRIEFING_WEATHER_COUNTRY_CODE=DE
+```
+
+The country code must be a two-letter ISO country code. The weather module uses Zippopotam.us to find the place name for the postal code, then resolves that place through Open-Meteo. The resulting coordinates and local timezone are used for the forecast request.
+
+Email delivery requires:
+
+```dotenv
+MS_CLIENT_ID=
+MS_TENANT_ID=
+BRIEFING_RECIPIENTS=person@example.com
+```
+
+Multiple recipients can be separated with commas.
+
+## Run
+
+Install dependencies, make sure Ollama is running with the configured model, and execute:
+
+```sh
+npm run briefing
+```
+
+The application collects enabled modules concurrently. If one collector fails, its section is marked unavailable while the remaining sections are still generated.
+
+## Development checks
+
+```sh
+npm test
+npm run typecheck
 ```

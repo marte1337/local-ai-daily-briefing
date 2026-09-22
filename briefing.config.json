@@ -1,0 +1,24 @@
+{
+    "modules": [
+        {
+            "name": "git",
+            "description": "Recent main-branch activity and active unmerged remote branches.",
+            "enabled": true
+        },
+        {
+            "name": "weather",
+            "description": "Current conditions and today's forecast for the postal code configured in .env.",
+            "enabled": true
+        },
+        {
+            "name": "general-news",
+            "description": "Important general news from the configured feed.",
+            "enabled": false
+        },
+        {
+            "name": "ai-news",
+            "description": "AI and developer-tooling news.",
+            "enabled": true
+        }
+    ]
+}

@@ -1,186 +1,182 @@
 import type { WeatherSummary } from "./types.js";
+import { weatherCodeToCondition } from "./weather-codes.js";
 
-const LOCATION = "Bremen, Germany";
-const LATITUDE = "53.0793";
-const LONGITUDE = "8.8017";
-const TIMEZONE = "Europe/Berlin";
 const REQUEST_TIMEOUT_MS = 10_000;
 
-type NonEmptyNumberArray = [number, ...number[]];
-
-type OpenMeteoCurrent = {
-    temperature_2m: number;
-    apparent_temperature: number;
-    weather_code: number;
-    wind_speed_10m: number;
-};
-
-type OpenMeteoDaily = {
-    temperature_2m_min: NonEmptyNumberArray;
-    temperature_2m_max: NonEmptyNumberArray;
-    precipitation_probability_max: NonEmptyNumberArray;
-    weather_code: NonEmptyNumberArray;
-};
-
-type OpenMeteoResponse = {
+type WeatherLocation = {
+    name: string;
+    country?: string;
+    latitude: number;
+    longitude: number;
     timezone: string;
-    current: OpenMeteoCurrent;
-    daily: OpenMeteoDaily;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isFiniteNumber(value: unknown): value is number {
-    return typeof value === "number" && Number.isFinite(value);
-}
+function readRecord(record: Record<string, unknown>, key: string, source: string): Record<string, unknown> {
+    const value = record[key];
 
-function isNonEmptyNumberArray(value: unknown): value is NonEmptyNumberArray {
-    return Array.isArray(value) && value.length > 0 && value.every(isFiniteNumber);
-}
-
-function isOpenMeteoResponse(value: unknown): value is OpenMeteoResponse {
-    if (!isRecord(value) || !isRecord(value.current) || !isRecord(value.daily)) {
-        return false;
+    if (!isRecord(value)) {
+        throw new Error(`${source} is missing object field: ${key}`);
     }
 
-    return (
-        typeof value.timezone === "string" &&
-        isFiniteNumber(value.current.temperature_2m) &&
-        isFiniteNumber(value.current.apparent_temperature) &&
-        isFiniteNumber(value.current.weather_code) &&
-        isFiniteNumber(value.current.wind_speed_10m) &&
-        isNonEmptyNumberArray(value.daily.temperature_2m_min) &&
-        isNonEmptyNumberArray(value.daily.temperature_2m_max) &&
-        isNonEmptyNumberArray(value.daily.precipitation_probability_max) &&
-        isNonEmptyNumberArray(value.daily.weather_code)
-    );
+    return value;
 }
 
-function weatherCodeToCondition(code: number): string {
-    switch (code) {
-        case 0:
-            return "Clear sky";
-        case 1:
-            return "Mainly clear";
-        case 2:
-            return "Partly cloudy";
-        case 3:
-            return "Overcast";
-        case 45:
-            return "Fog";
-        case 48:
-            return "Depositing rime fog";
-        case 51:
-            return "Light drizzle";
-        case 53:
-            return "Moderate drizzle";
-        case 55:
-            return "Dense drizzle";
-        case 56:
-            return "Light freezing drizzle";
-        case 57:
-            return "Dense freezing drizzle";
-        case 61:
-            return "Slight rain";
-        case 63:
-            return "Moderate rain";
-        case 65:
-            return "Heavy rain";
-        case 66:
-            return "Light freezing rain";
-        case 67:
-            return "Heavy freezing rain";
-        case 71:
-            return "Slight snowfall";
-        case 73:
-            return "Moderate snowfall";
-        case 75:
-            return "Heavy snowfall";
-        case 77:
-            return "Snow grains";
-        case 80:
-            return "Slight rain showers";
-        case 81:
-            return "Moderate rain showers";
-        case 82:
-            return "Violent rain showers";
-        case 85:
-            return "Slight snow showers";
-        case 86:
-            return "Heavy snow showers";
-        case 95:
-            return "Thunderstorm";
-        case 96:
-            return "Thunderstorm with slight hail";
-        case 99:
-            return "Thunderstorm with heavy hail";
-        default:
-            throw new Error(`Unsupported Open-Meteo weather code: ${code}`);
+function readString(record: Record<string, unknown>, key: string, source: string): string {
+    const value = record[key];
+
+    if (typeof value !== "string" || !value.trim()) {
+        throw new Error(`${source} is missing string field: ${key}`);
     }
+
+    return value;
 }
 
-function buildForecastUrl(): URL {
+function readNumber(record: Record<string, unknown>, key: string, source: string): number {
+    const value = record[key];
+
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+        throw new Error(`${source} is missing numeric field: ${key}`);
+    }
+
+    return value;
+}
+
+function readFirstNumber(record: Record<string, unknown>, key: string, source: string): number {
+    const value = record[key];
+
+    if (!Array.isArray(value) || typeof value[0] !== "number" || !Number.isFinite(value[0])) {
+        throw new Error(`${source} is missing numeric array field: ${key}`);
+    }
+
+    return value[0];
+}
+
+function buildPostalCodeUrl(postalCode: string, countryCode: string): URL {
+    return new URL(`${encodeURIComponent(countryCode)}/${encodeURIComponent(postalCode)}`, "https://api.zippopotam.us/");
+}
+
+function buildGeocodingUrl(placeName: string, countryCode: string): URL {
+    const url = new URL("https://geocoding-api.open-meteo.com/v1/search");
+
+    url.searchParams.set("name", placeName);
+    url.searchParams.set("countryCode", countryCode);
+    url.searchParams.set("count", "1");
+    url.searchParams.set("language", "en");
+
+    return url;
+}
+
+function buildForecastUrl(location: WeatherLocation): URL {
     const url = new URL("https://api.open-meteo.com/v1/forecast");
 
-    url.searchParams.set("latitude", LATITUDE);
-    url.searchParams.set("longitude", LONGITUDE);
+    url.searchParams.set("latitude", String(location.latitude));
+    url.searchParams.set("longitude", String(location.longitude));
     url.searchParams.set("current", "temperature_2m,apparent_temperature,weather_code,wind_speed_10m");
     url.searchParams.set("daily", "temperature_2m_min,temperature_2m_max,precipitation_probability_max,weather_code");
     url.searchParams.set("temperature_unit", "celsius");
     url.searchParams.set("wind_speed_unit", "kmh");
-    url.searchParams.set("timezone", TIMEZONE);
+    url.searchParams.set("timezone", location.timezone);
     url.searchParams.set("forecast_days", "1");
 
     return url;
 }
 
-export async function getWeatherSummary(): Promise<WeatherSummary> {
+async function fetchJson(url: URL, apiName: string, fetcher: typeof fetch): Promise<unknown> {
     let response: Response;
 
     try {
-        response = await fetch(buildForecastUrl(), {
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-        });
+        response = await fetcher(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
     } catch (error) {
-        throw new Error("Unable to reach the Open-Meteo weather API", { cause: error });
+        throw new Error(`Unable to reach the ${apiName} API`, { cause: error });
     }
 
     if (!response.ok) {
         const details = (await response.text()).trim();
-        const suffix = details ? `: ${details}` : "";
-
-        throw new Error(`Open-Meteo request failed with HTTP ${response.status} ${response.statusText}${suffix}`);
+        throw new Error(`${apiName} request failed with HTTP ${response.status} ${response.statusText}${details ? `: ${details}` : ""}`);
     }
-
-    let data: unknown;
 
     try {
-        data = await response.json();
+        return await response.json();
     } catch (error) {
-        throw new Error("Open-Meteo returned invalid JSON", { cause: error });
+        throw new Error(`${apiName} API returned invalid JSON`, { cause: error });
+    }
+}
+
+function readPlaceName(value: unknown, countryCode: string): string {
+    if (!isRecord(value) || value["country abbreviation"] !== countryCode || !Array.isArray(value.places) || !isRecord(value.places[0])) {
+        throw new Error(`Postal-code lookup returned no location in ${countryCode}.`);
     }
 
-    if (!isOpenMeteoResponse(data)) {
-        throw new Error("Open-Meteo response is missing required weather fields or contains invalid values");
+    return readString(value.places[0], "place name", "Postal-code lookup");
+}
+
+function readLocation(value: unknown): WeatherLocation {
+    if (!isRecord(value) || !Array.isArray(value.results) || !isRecord(value.results[0])) {
+        throw new Error("Open-Meteo geocoding returned no location.");
     }
 
-    if (data.timezone !== TIMEZONE) {
-        throw new Error(`Open-Meteo returned unexpected timezone: ${data.timezone}`);
-    }
+    const result = value.results[0];
 
     return {
-        location: LOCATION,
-        currentTemperature: data.current.temperature_2m,
-        apparentTemperature: data.current.apparent_temperature,
-        currentCondition: weatherCodeToCondition(data.current.weather_code),
-        windSpeed: data.current.wind_speed_10m,
+        name: readString(result, "name", "Open-Meteo geocoding response"),
+        country: typeof result.country === "string" ? result.country : undefined,
+        latitude: readNumber(result, "latitude", "Open-Meteo geocoding response"),
+        longitude: readNumber(result, "longitude", "Open-Meteo geocoding response"),
+        timezone: readString(result, "timezone", "Open-Meteo geocoding response"),
+    };
+}
+
+export async function resolveWeatherLocation(postalCode: string, countryCode: string, fetcher: typeof fetch = fetch): Promise<WeatherLocation> {
+    const normalizedPostalCode = postalCode.trim();
+    const normalizedCountryCode = countryCode.trim().toUpperCase();
+
+    if (normalizedPostalCode.length < 2) {
+        throw new Error("BRIEFING_WEATHER_POSTAL_CODE must contain at least two characters.");
+    }
+
+    if (!/^[A-Z]{2}$/.test(normalizedCountryCode)) {
+        throw new Error("BRIEFING_WEATHER_COUNTRY_CODE must be a two-letter ISO country code.");
+    }
+
+    const postalData = await fetchJson(buildPostalCodeUrl(normalizedPostalCode, normalizedCountryCode), "Zippopotam.us postal-code", fetcher);
+    const placeName = readPlaceName(postalData, normalizedCountryCode);
+    const locationData = await fetchJson(buildGeocodingUrl(placeName, normalizedCountryCode), "Open-Meteo geocoding", fetcher);
+
+    return readLocation(locationData);
+}
+
+export async function getWeatherSummary(postalCode: string, countryCode: string, fetcher: typeof fetch = fetch): Promise<WeatherSummary> {
+    const location = await resolveWeatherLocation(postalCode, countryCode, fetcher);
+    const value = await fetchJson(buildForecastUrl(location), "Open-Meteo weather", fetcher);
+
+    if (!isRecord(value)) {
+        throw new Error("Open-Meteo weather response is invalid.");
+    }
+
+    const timezone = readString(value, "timezone", "Open-Meteo weather response");
+
+    if (timezone !== location.timezone) {
+        throw new Error(`Open-Meteo returned unexpected timezone: ${timezone}`);
+    }
+
+    const current = readRecord(value, "current", "Open-Meteo weather response");
+    const daily = readRecord(value, "daily", "Open-Meteo weather response");
+
+    return {
+        location: location.country ? `${location.name}, ${location.country}` : location.name,
+        currentTemperature: readNumber(current, "temperature_2m", "Open-Meteo current weather"),
+        apparentTemperature: readNumber(current, "apparent_temperature", "Open-Meteo current weather"),
+        currentCondition: weatherCodeToCondition(readNumber(current, "weather_code", "Open-Meteo current weather")),
+        windSpeed: readNumber(current, "wind_speed_10m", "Open-Meteo current weather"),
         today: {
-            minTemperature: data.daily.temperature_2m_min[0],
-            maxTemperature: data.daily.temperature_2m_max[0],
-            precipitationProbability: data.daily.precipitation_probability_max[0],
-            condition: weatherCodeToCondition(data.daily.weather_code[0]),
+            minTemperature: readFirstNumber(daily, "temperature_2m_min", "Open-Meteo daily forecast"),
+            maxTemperature: readFirstNumber(daily, "temperature_2m_max", "Open-Meteo daily forecast"),
+            precipitationProbability: readFirstNumber(daily, "precipitation_probability_max", "Open-Meteo daily forecast"),
+            condition: weatherCodeToCondition(readFirstNumber(daily, "weather_code", "Open-Meteo daily forecast")),
         },
     };
 }
