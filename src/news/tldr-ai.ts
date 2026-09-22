@@ -35,13 +35,13 @@ export async function getAiNews(): Promise<NewsItem[]> {
         }
 
         const title = match[1]?.trim();
+        const readingMinutes = Number.parseInt(match[2], 10);
 
         if (!title) {
             return;
         }
 
         const summaryText = normalizeText($(element).nextAll("span").first().text());
-
         const summary = summaryText || null;
 
         items.push({
@@ -51,6 +51,7 @@ export async function getAiNews(): Promise<NewsItem[]> {
             publishedAt: getTldrIssueDate(issueUrl),
             summary,
             section: currentSection,
+            readingMinutes,
         });
     });
 
