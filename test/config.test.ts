@@ -17,19 +17,26 @@ test("parses module selection and preserves order", () => {
     );
 });
 
-test("continues to support the compact string format", () => {
-    assert.deepEqual(parseBriefingConfig({ modules: ["weather", "git"] }), {
-        modules: ["weather", "git"],
-    });
+test("rejects the obsolete compact string format", () => {
+    assert.throws(() => parseBriefingConfig({ modules: ["weather", "git"] }), /object containing a string "name"/);
 });
 
 test("rejects unknown modules", () => {
-    assert.throws(() => parseBriefingConfig({ modules: ["calendar"] }), /Unknown briefing module: calendar/);
+    assert.throws(() => parseBriefingConfig({ modules: [{ name: "calendar", enabled: true }] }), /Unknown briefing module: calendar/);
 });
 
 test("rejects duplicate and empty module lists", () => {
     assert.throws(() => parseBriefingConfig({ modules: [] }), /at least one module/);
-    assert.throws(() => parseBriefingConfig({ modules: ["git", "git"] }), /listed more than once/);
+    assert.throws(
+        () =>
+            parseBriefingConfig({
+                modules: [
+                    { name: "git", enabled: true },
+                    { name: "git", enabled: false },
+                ],
+            }),
+        /listed more than once/,
+    );
     assert.throws(
         () =>
             parseBriefingConfig({

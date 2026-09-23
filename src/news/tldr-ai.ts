@@ -1,7 +1,7 @@
 import * as cheerio from "cheerio";
 import type { NewsItem } from "../types.js";
 import { deduplicateNews } from "./news-utils.js";
-import { cleanTldrUrl, fetchHtml, getLatestTldrIssueUrl, getTldrIssueDate, normalizeText, TLDR_AI_SECTIONS } from "./tldr-utils.js";
+import { cleanTldrUrl, fetchHtml, getLatestTldrIssueUrl, normalizeText, TLDR_AI_SECTIONS } from "./tldr-utils.js";
 
 export async function getAiNews(): Promise<NewsItem[]> {
     const issueUrl = await getLatestTldrIssueUrl();
@@ -46,9 +46,7 @@ export async function getAiNews(): Promise<NewsItem[]> {
 
         items.push({
             title,
-            source: "TLDR AI",
             url: cleanTldrUrl(href),
-            publishedAt: getTldrIssueDate(issueUrl),
             summary,
             section: currentSection,
             readingMinutes,

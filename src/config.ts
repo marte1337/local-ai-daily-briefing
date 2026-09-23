@@ -41,8 +41,8 @@ export function parseBriefingConfig(value: unknown): BriefingConfig {
     const seen = new Set<string>();
 
     for (const moduleConfig of value.modules) {
-        const moduleName = typeof moduleConfig === "string" ? moduleConfig : readModuleName(moduleConfig);
-        const enabled = typeof moduleConfig === "string" ? true : readModuleEnabled(moduleConfig);
+        const moduleName = readModuleName(moduleConfig);
+        const enabled = readModuleEnabled(moduleConfig);
 
         if (!MODULE_NAMES.has(moduleName)) {
             throw new Error(`Unknown briefing module: ${String(moduleName)}. Available modules: ${BRIEFING_MODULE_NAMES.join(", ")}.`);
@@ -68,7 +68,7 @@ export function parseBriefingConfig(value: unknown): BriefingConfig {
 
 function readModuleName(value: unknown): string {
     if (!isRecord(value) || typeof value.name !== "string") {
-        throw new Error('Each briefing module must be a module name or an object containing a string "name".');
+        throw new Error('Each briefing module must be an object containing a string "name".');
     }
 
     return value.name;

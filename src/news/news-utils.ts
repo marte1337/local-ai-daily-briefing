@@ -1,12 +1,11 @@
 import Parser from "rss-parser";
 import type { NewsItem } from "../types.js";
 
-export const parser = new Parser();
+const parser = new Parser();
 
 export type FeedItem = Awaited<ReturnType<typeof parser.parseURL>>["items"][number];
 
 export type FeedConfig = {
-    source: string;
     url: string;
     filter?: (item: FeedItem) => boolean;
 };
@@ -29,7 +28,6 @@ export async function getFeedNews(config: FeedConfig): Promise<NewsItem[]> {
         return [
             {
                 title,
-                source: config.source,
                 url,
                 publishedAt: item.isoDate ?? item.pubDate ?? null,
                 summary: item.contentSnippet?.trim() || null,

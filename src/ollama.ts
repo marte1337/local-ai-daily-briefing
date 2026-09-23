@@ -2,8 +2,6 @@ import http from "node:http";
 
 type OllamaChunk = {
     response?: string;
-    thinking?: string;
-    done?: boolean;
     error?: string;
 };
 

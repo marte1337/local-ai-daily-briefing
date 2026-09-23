@@ -2,7 +2,6 @@ import type { NewsItem } from "../types.js";
 import { deduplicateNews, getFeedNews, sortNewestFirst, type FeedConfig } from "./news-utils.js";
 
 const TAGESSCHAU: FeedConfig = {
-    source: "Tagesschau",
     url: "https://www.tagesschau.de/index~rss2.xml",
     filter: (item) => {
         const link = item.link ?? "";

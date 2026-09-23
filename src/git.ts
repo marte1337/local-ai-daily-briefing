@@ -1,9 +1,11 @@
 import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { basename } from "node:path";
-import type { ActiveBranch, ActiveBranchCommit, FileChangeStat, GitCommit, GitSummary } from "./types.js";
+import { promisify } from "node:util";
+import type { ActiveBranch, ActiveBranchCommit, GitCommit, GitSummary } from "./types.js";
 
 const execFileAsync = promisify(execFile);
+const COMMIT_MARKER = "@@COMMIT@@";
+const FIELD_SEPARATOR = "\x1f";
 
 async function git(repoPath: string, args: string[]): Promise<string> {
     const { stdout } = await execFileAsync("git", args, {
@@ -14,103 +16,7 @@ async function git(repoPath: string, args: string[]): Promise<string> {
     return stdout.trim();
 }
 
-function parseNumstatCount(value: string): number | null {
-    if (value === "-") {
-        return null;
-    }
-
-    if (!/^\d+$/.test(value)) {
-        throw new Error(`Unexpected Git numstat value: ${value}`);
-    }
-
-    return Number.parseInt(value, 10);
-}
-
-function parseNumstat(output: string): FileChangeStat[] {
-    const fileStats: FileChangeStat[] = [];
-    let position = 0;
-
-    while (position < output.length) {
-        const entryEnd = output.indexOf("\0", position);
-
-        if (entryEnd === -1) {
-            throw new Error("Unexpected unterminated Git numstat entry");
-        }
-
-        const entry = output.slice(position, entryEnd);
-        position = entryEnd + 1;
-
-        if (!entry) {
-            continue;
-        }
-
-        const firstTab = entry.indexOf("\t");
-        const secondTab = entry.indexOf("\t", firstTab + 1);
-
-        if (firstTab === -1 || secondTab === -1) {
-            throw new Error(`Unexpected Git numstat entry: ${entry}`);
-        }
-
-        const additions = parseNumstatCount(entry.slice(0, firstTab));
-        const deletions = parseNumstatCount(entry.slice(firstTab + 1, secondTab));
-        let path = entry.slice(secondTab + 1);
-
-        // With -z, renames and copies put the old and new paths in separate
-        // NUL-terminated fields. Use the destination path for the stat entry.
-        if (!path) {
-            const oldPathEnd = output.indexOf("\0", position);
-
-            if (oldPathEnd === -1) {
-                throw new Error("Unexpected unterminated old path in Git numstat output");
-            }
-
-            position = oldPathEnd + 1;
-            const newPathEnd = output.indexOf("\0", position);
-
-            if (newPathEnd === -1) {
-                throw new Error("Unexpected unterminated new path in Git numstat output");
-            }
-
-            path = output.slice(position, newPathEnd);
-            position = newPathEnd + 1;
-        }
-
-        fileStats.push({
-            path,
-            additions,
-            deletions,
-        });
-    }
-
-    return fileStats;
-}
-
-function sumFileStat(fileStats: FileChangeStat[], field: "additions" | "deletions"): number | null {
-    let total = 0;
-
-    for (const fileStat of fileStats) {
-        const value = fileStat[field];
-
-        if (value === null) {
-            return null;
-        }
-
-        total += value;
-    }
-
-    return total;
-}
-
-async function getRecentCommits(repoPath: string, since: string): Promise<GitCommit[]> {
-    const output = await git(repoPath, [
-        "log",
-        `--since=${since}`,
-        "--no-merges",
-        "--find-renames",
-        "--pretty=format:@@COMMIT@@%x1f%h%x1f%an%x1f%aI%x1f%s",
-        "--name-status",
-    ]);
-
+function parseCommits(output: string): GitCommit[] {
     if (!output) {
         return [];
     }
@@ -119,102 +25,60 @@ async function getRecentCommits(repoPath: string, since: string): Promise<GitCom
     let currentCommit: GitCommit | undefined;
 
     for (const line of output.split(/\r?\n/)) {
-        if (line.startsWith("@@COMMIT@@")) {
-            const [, hash, author, date, message] = line.split("\x1f");
+        if (line.startsWith(COMMIT_MARKER)) {
+            const [hash, author, date, message] = line.slice(COMMIT_MARKER.length).split(FIELD_SEPARATOR);
 
             currentCommit = {
                 hash,
                 author,
                 date,
                 message,
-                body: "",
-                addedFiles: [],
-                modifiedFiles: [],
-                deletedFiles: [],
-                renamedFiles: [],
-                fileStats: [],
-                filesChanged: 0,
-                additions: 0,
-                deletions: 0,
-                otherChanges: [],
+                changedFiles: [],
             };
-
             commits.push(currentCommit);
-            continue;
+        } else if (currentCommit && line.trim()) {
+            currentCommit.changedFiles.push(line.trim());
         }
-
-        if (!currentCommit || !line.trim()) {
-            continue;
-        }
-
-        const [status, ...paths] = line.split("\t");
-
-        if (!status || paths.length === 0) {
-            continue;
-        }
-
-        if (status === "A") {
-            currentCommit.addedFiles.push(paths[0]);
-            continue;
-        }
-
-        if (status === "M") {
-            currentCommit.modifiedFiles.push(paths[0]);
-            continue;
-        }
-
-        if (status === "D") {
-            currentCommit.deletedFiles.push(paths[0]);
-            continue;
-        }
-
-        if (status.startsWith("R") && paths.length >= 2) {
-            currentCommit.renamedFiles.push({
-                from: paths[0],
-                to: paths[1],
-            });
-            continue;
-        }
-
-        currentCommit.otherChanges.push({
-            status,
-            paths,
-        });
-    }
-
-    for (const commit of commits) {
-        const [body, numstat] = await Promise.all([
-            git(repoPath, ["show", "-s", "--format=%b", commit.hash]),
-            git(repoPath, ["show", "--format=", "--numstat", "-z", "--find-renames", commit.hash]),
-        ]);
-
-        commit.body = body;
-        commit.fileStats = parseNumstat(numstat);
-        commit.filesChanged = commit.fileStats.length;
-        commit.additions = sumFileStat(commit.fileStats, "additions");
-        commit.deletions = sumFileStat(commit.fileStats, "deletions");
     }
 
     return commits;
 }
 
-async function getUnmergedBranchCommits(repoPath: string, branchName: string, limit = 5): Promise<ActiveBranchCommit[]> {
-    const output = await git(repoPath, ["log", "--no-merges", `-${limit}`, "--format=%h%x1f%an%x1f%aI%x1f%s", `origin/main..${branchName}`]);
+async function getRecentCommits(repoPath: string, since: string): Promise<GitCommit[]> {
+    const output = await git(repoPath, [
+        "log",
+        `--since=${since}`,
+        "--no-merges",
+        "--find-renames",
+        `--format=${COMMIT_MARKER}%h${FIELD_SEPARATOR}%an${FIELD_SEPARATOR}%aI${FIELD_SEPARATOR}%s`,
+        "--name-only",
+    ]);
 
+    return parseCommits(output);
+}
+
+function parseBranchCommits(output: string): ActiveBranchCommit[] {
     if (!output) {
         return [];
     }
 
     return output.split(/\r?\n/).map((line) => {
-        const [hash, author, date, message] = line.split("\x1f");
-
-        return {
-            hash,
-            author,
-            date,
-            message,
-        };
+        const [hash, author, date, message] = line.split(FIELD_SEPARATOR);
+        return { hash, author, date, message };
     });
+}
+
+async function getUnmergedBranchCommits(repoPath: string, branchName: string, since: string, limit = 5): Promise<ActiveBranchCommit[]> {
+    const output = await git(repoPath, [
+        "log",
+        "--no-merges",
+        `--since=${since}`,
+        `-${limit}`,
+        `--format=%h${FIELD_SEPARATOR}%an${FIELD_SEPARATOR}%aI${FIELD_SEPARATOR}%s`,
+        `origin/main..${branchName}`,
+    ]);
+
+    return parseBranchCommits(output);
 }
 
 async function refreshRemoteBranches(repoPath: string): Promise<void> {
@@ -225,69 +89,59 @@ async function refreshRemoteBranches(repoPath: string): Promise<void> {
     }
 }
 
-async function getActiveBranches(repoPath: string, since: string): Promise<ActiveBranch[]> {
-    const output = await git(repoPath, ["for-each-ref", "refs/remotes/origin", "--no-merged=origin/main", "--format=%(refname:short)"]);
+async function getActiveBranch(repoPath: string, branchName: string, since: string): Promise<ActiveBranch | null> {
+    const unmergedCommits = await getUnmergedBranchCommits(repoPath, branchName, since);
+    const latestCommit = unmergedCommits[0];
 
-    if (!output) {
-        return [];
+    if (!latestCommit) {
+        return null;
     }
 
+    const commitsAhead = Number.parseInt(await git(repoPath, ["rev-list", "--count", `origin/main..${branchName}`]), 10);
+
+    return {
+        name: branchName.replace(/^origin\//, ""),
+        author: latestCommit.author,
+        lastCommitDate: latestCommit.date,
+        commitsAhead,
+        unmergedCommits,
+    };
+}
+
+async function getActiveBranches(repoPath: string, since: string): Promise<ActiveBranch[]> {
+    const output = await git(repoPath, ["for-each-ref", "refs/remotes/origin", "--no-merged=origin/main", "--format=%(refname:short)"]);
     const branchNames = output
         .split(/\r?\n/)
         .map((branch) => branch.trim())
-        .filter(Boolean)
-        .filter((branch) => branch !== "origin/main" && branch !== "origin/HEAD");
+        .filter((branch) => branch && branch !== "origin/main" && branch !== "origin/HEAD");
 
-    const activeBranches: ActiveBranch[] = [];
+    const branches = await Promise.all(branchNames.map((branchName) => getActiveBranch(repoPath, branchName, since)));
 
-    for (const branchName of branchNames) {
-        const latestCommit = await git(repoPath, ["log", "-1", `--since=${since}`, "--format=%an%x1f%aI%x1f%s", `origin/main..${branchName}`]);
+    return branches
+        .filter((branch): branch is ActiveBranch => branch !== null)
+        .sort((a, b) => Date.parse(b.lastCommitDate) - Date.parse(a.lastCommitDate));
+}
 
-        if (!latestCommit) {
-            continue;
-        }
-
-        const [author, lastCommitDate, lastCommitMessage] = latestCommit.split("\x1f");
-
-        const commitsAheadOutput = await git(repoPath, ["rev-list", "--count", `origin/main..${branchName}`]);
-
-        const commitsAhead = Number.parseInt(commitsAheadOutput, 10);
-
-        const unmergedCommits = await getUnmergedBranchCommits(repoPath, branchName);
-
-        activeBranches.push({
-            name: branchName.replace(/^origin\//, ""),
-            author,
-            lastCommitDate,
-            lastCommitMessage,
-            commitsAhead,
-            unmergedCommits,
-        });
+async function getActiveBranchesSafely(repoPath: string, since: string): Promise<ActiveBranch[]> {
+    try {
+        return await getActiveBranches(repoPath, since);
+    } catch {
+        console.warn("Could not inspect active remote branches.");
+        return [];
     }
-
-    return activeBranches.sort((a, b) => Date.parse(b.lastCommitDate) - Date.parse(a.lastCommitDate));
 }
 
 export async function getGitSummary(repoPath: string, since = "1 day ago", branchSince = "1 day ago"): Promise<GitSummary> {
     await refreshRemoteBranches(repoPath);
 
-    const branch = await git(repoPath, ["rev-parse", "--abbrev-ref", "HEAD"]);
-
-    const status = await git(repoPath, ["status", "--short"]);
-
-    const commits = await getRecentCommits(repoPath, since);
-
-    let activeBranches: ActiveBranch[] = [];
-
-    try {
-        activeBranches = await getActiveBranches(repoPath, branchSince);
-    } catch {
-        console.warn("Could not inspect active remote branches.");
-    }
-
-    const unstagedDiff = await git(repoPath, ["diff", "--stat"]);
-
-    const stagedDiff = await git(repoPath, ["diff", "--cached", "--stat"]);
+    const [branch, status, commits, activeBranches, unstagedDiff, stagedDiff] = await Promise.all([
+        git(repoPath, ["rev-parse", "--abbrev-ref", "HEAD"]),
+        git(repoPath, ["status", "--short"]),
+        getRecentCommits(repoPath, since),
+        getActiveBranchesSafely(repoPath, branchSince),
+        git(repoPath, ["diff", "--stat"]),
+        git(repoPath, ["diff", "--cached", "--stat"]),
+    ]);
 
     return {
         repository: basename(repoPath),

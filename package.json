@@ -3,7 +3,7 @@
     "version": "1.0.0",
     "main": "index.js",
     "scripts": {
-        "test": "tsx --test test/config.test.ts test/prompt.test.ts test/weather.test.ts",
+        "test": "tsx --test test/config.test.ts test/git.test.ts test/prompt.test.ts test/weather.test.ts",
         "typecheck": "tsc --noEmit",
         "briefing": "tsx src/index.ts"
     },

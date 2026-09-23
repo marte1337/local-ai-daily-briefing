@@ -23,9 +23,8 @@ export function createGitModule(): BriefingModule {
 - Do not show a latest commit date when latestMainCommitDate is not supplied.
 - Group related commits when useful, but keep unrelated work distinct.
 - Mention components or files when they help explain the work.
-- Treat supplied Git statistics as authoritative.
+- Treat supplied Git details as authoritative.
 - Do not infer behavior or architecture from filenames alone.
-- Never calculate combined commit counts, file counts, additions, or deletions across multiple commits.
 - For each active branch, mention its name, commits ahead of main, and summarize its supplied unmerged commits.
 - Mention lastCommitDate only when it is supplied.
 - Do not describe unmerged branch work as already present on main.
@@ -58,14 +57,7 @@ function prepareGitData(summary: GitSummary, mainGitDays: number, branchGitDays:
             author: commit.author,
             date: formatDate(commit.date),
             message: commit.message,
-            body: commit.body || undefined,
-            addedFiles: commit.addedFiles,
-            modifiedFiles: commit.modifiedFiles,
-            deletedFiles: commit.deletedFiles,
-            renamedFiles: commit.renamedFiles,
-            filesChanged: commit.filesChanged,
-            additions: commit.additions,
-            deletions: commit.deletions,
+            changedFiles: commit.changedFiles,
         })),
         activeBranches: summary.activeBranches.map((branch) => ({
             name: branch.name,

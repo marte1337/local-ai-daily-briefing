@@ -6,29 +6,20 @@ import { marked } from "marked";
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { requireEnvironment } from "./environment.js";
 
 const GRAPH_SCOPES = ["https://graph.microsoft.com/Mail.Send"];
 
-function getRequiredEnv(name: string): string {
-    const value = process.env[name];
-
-    if (!value) {
-        throw new Error(`Missing environment variable: ${name}`);
-    }
-
-    return value;
-}
-
 function getRecipients(): string[] {
-    return getRequiredEnv("BRIEFING_RECIPIENTS")
+    return requireEnvironment("BRIEFING_RECIPIENTS")
         .split(",")
         .map((recipient) => recipient.trim())
         .filter(Boolean);
 }
 
 async function createMicrosoftClient(): Promise<PublicClientApplication> {
-    const clientId = getRequiredEnv("MS_CLIENT_ID");
-    const tenantId = getRequiredEnv("MS_TENANT_ID");
+    const clientId = requireEnvironment("MS_CLIENT_ID");
+    const tenantId = requireEnvironment("MS_TENANT_ID");
 
     const cacheDirectory = join(homedir(), ".local-daily-briefing");
 

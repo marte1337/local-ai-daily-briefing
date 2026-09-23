@@ -1,37 +1,9 @@
-export type RenamedFile = {
-    from: string;
-    to: string;
-};
-
-export type OtherFileChange = {
-    status: string;
-    paths: string[];
-};
-
-export type FileChangeStat = {
-    path: string;
-    additions: number | null;
-    deletions: number | null;
-};
-
 export type GitCommit = {
     hash: string;
     author: string;
     date: string;
     message: string;
-    body: string;
-
-    addedFiles: string[];
-    modifiedFiles: string[];
-    deletedFiles: string[];
-    renamedFiles: RenamedFile[];
-    fileStats: FileChangeStat[];
-    filesChanged: number;
-    additions: number | null;
-    deletions: number | null;
-
-    // Keeps unusual Git statuses without throwing information away.
-    otherChanges: OtherFileChange[];
+    changedFiles: string[];
 };
 
 export type ActiveBranchCommit = {
@@ -45,7 +17,6 @@ export type ActiveBranch = {
     name: string;
     author: string;
     lastCommitDate: string;
-    lastCommitMessage: string;
     commitsAhead: number;
     unmergedCommits: ActiveBranchCommit[];
 };
@@ -77,15 +48,9 @@ export type WeatherSummary = {
 export type NewsItem = {
     title: string;
     englishTitle?: string;
-    source: string;
     url: string;
-    publishedAt: string | null;
+    publishedAt?: string | null;
     summary: string | null;
     section?: string;
     readingMinutes?: number;
-};
-
-export type NewsSummary = {
-    general: NewsItem[];
-    ai: NewsItem[];
 };

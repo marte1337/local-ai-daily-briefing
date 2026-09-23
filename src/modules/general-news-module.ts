@@ -21,6 +21,8 @@ export function createGeneralNewsModule(model: string): BriefingModule {
             const items = await getGeneralNews();
             let translatedItems = items;
 
+            // Keep translation as a focused model call: broader briefing prompts
+            // have repeatedly left German headlines untranslated.
             try {
                 translatedItems = await translateNewsTitles(items, model);
             } catch (error) {

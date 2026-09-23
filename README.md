@@ -46,7 +46,7 @@ Module collection runs concurrently. If one data source is unavailable, the othe
 }
 ```
 
-At least one module must be enabled, and a module cannot be listed more than once. The original compact format, such as `"modules": ["git", "weather"]`, is also supported. To keep the config elsewhere, set `BRIEFING_CONFIG` to its path.
+At least one module must be enabled, and a module cannot be listed more than once. To keep the config elsewhere, set `BRIEFING_CONFIG` to its path.
 
 ## Configure values
 
